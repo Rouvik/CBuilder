@@ -1,3 +1,2 @@
 # exclude all executables
-*/*.exe
-
+*.exe
