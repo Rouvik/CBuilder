@@ -1,4 +1,4 @@
-# CBuilder
+# CBuilder (probably Abandoned)
 A simple header only C build script library to easily develop C based build scripts on different platforms (currently I am only targeting Windows)
 
 # Why CBuilder?
