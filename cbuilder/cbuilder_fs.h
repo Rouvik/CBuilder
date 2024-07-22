@@ -33,35 +33,34 @@ SOFTWARE.
 #define CBUILD_FS_DIRMODE_FILES 1
 #define CBUILD_FS_DIRMODE_FOLDERS 1 << 1
 
-CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode);
+CBuild_String CBuild_Fs_dir(const char *path, const char *mask, uint8_t mode, const char *delim);
 
 #ifdef _WIN32 // systems with win api
 
 #include <windows.h>
 
-CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
+CBuild_String CBuild_Fs_dir(const char *path, const char *mask, uint8_t mode, const char *delim)
 {
     WIN32_FIND_DATAA fdFile;
     HANDLE hFind = NULL;
 
-    int len = strlen(path);
-    char cpyPath[len + 3 + (path[len - 1] == '\\' || path[len - 1] == '/' ? 0 : 1)];
-    memcpy(cpyPath, path, len + 1);
+    if (mask[0] == '\0') // make sure mask is not error type
+    {
+        mask = "*.*";
+    }
 
-    if (path[len - 1] == '\\' || path[len - 1] == '/')
-    {
-        strcat(cpyPath, "*.*");
-    }
-    else
-    {
-        strcat(cpyPath, "/*.*");
-    }
+    int pathLen = strlen(path);
+    int maskLen = strlen(mask);
+
+    char cpyPath[pathLen + maskLen + 1];
+    memcpy(cpyPath, path, pathLen);
+    memcpy(cpyPath + pathLen, mask, maskLen + 1);
 
     CBuild_String output = CBuild_String_init("");
 
     if ((hFind = FindFirstFileA(cpyPath, &fdFile)) == INVALID_HANDLE_VALUE)
     {
-        fprintf(stderr, "[CBuilder FS Error] Failed to open path %s\n", path);
+        fprintf(stderr, "[CBuilder FS Error] Failed to open path %s\n", cpyPath);
         CBuild_String_deinit(&output);
         return (CBuild_String){NULL, 0, 0};
     }
@@ -82,7 +81,7 @@ CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
             CBuild_String_concatCStr(&output, fdFile.cFileName);
         }
 
-        CBuild_String_concatCStr(&output, ":"); // add the ending delimeter
+        CBuild_String_concatCStr(&output, (char *)delim); // add the ending delimeter
     } while (FindNextFileA(hFind, &fdFile));
 
     FindClose(hFind); // cleanup
@@ -95,8 +94,13 @@ CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
 #include <dirent.h>
 #include <sys/stat.h>
 #include <errno.h>
-CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
+CBuild_String CBuild_Fs_dir(const char *path, const char *mask, uint8_t mode, const char *delim)
 {
+    if (mask[0] == '/') // if first character is / then ignore
+    {
+        mask++;
+    }
+
     struct dirent *dirEntry;
     DIR *dir;
     struct stat fileStatus;
@@ -118,6 +122,44 @@ CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
             continue;
         }
 
+        char *dotPos = strchr(mask, '.') + 1;
+        if (!dotPos)
+        {
+            dotPos = (char *)mask + strlen(mask);
+        }
+
+        char *fileExt = strrchr(dirEntry->d_name, '.') + 1;
+        int fileNameLen = fileExt - dirEntry->d_name - 1;
+        if (fileExt == NULL + 1)
+        {
+            int dirLen = strlen(dirEntry->d_name);
+            fileExt = dirEntry->d_name + dirLen;
+            fileNameLen = dirLen;
+        }
+        
+        char *fileName;
+        if (fileExt == dirEntry->d_name + 1)
+        {
+            fileName = "";
+        }
+        else
+        {
+            fileName = (char *)alloca(fileNameLen + 1);
+            memcpy(fileName, dirEntry->d_name, fileNameLen);
+            fileName[fileNameLen] = '\0';
+        }
+        
+        int maskLen = strlen(mask);
+        if (mask[0] != '*' && strncmp(mask, fileName, fileNameLen - 1))
+        {
+            continue;
+        }
+
+        if (dotPos[0] != '*' && strcmp(dotPos, fileExt))
+        {
+            continue;
+        }
+
         stat(dirEntry->d_name, &fileStatus);
         if ((mode & CBUILD_FS_DIRMODE_FOLDERS) && (fileStatus.st_mode & S_IFDIR))
         {
@@ -128,7 +170,7 @@ CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
             CBuild_String_concatCStr(&output, dirEntry->d_name);
         }
 
-        CBuild_String_concatCStr(&output, ":");
+        CBuild_String_concatCStr(&output, (char *)delim);
     }
 
     closedir(dir); // cleanup

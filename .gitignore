@@ -1,2 +1,5 @@
 # exclude all executables
 *.exe
+
+# ignore the sample
+sample/
