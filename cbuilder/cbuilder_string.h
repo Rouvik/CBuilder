@@ -47,7 +47,7 @@ typedef struct
 CBuild_String CBuild_String_init(const char *src)
 {
     unsigned int count;
-    unsigned int len = strlen(src);
+    int len = strlen(src);
     if (len == 0)
     {
         count = 1;
@@ -142,7 +142,7 @@ void CBuild_String_reset(CBuild_String *str)
 CBuild_String CBuild_String_copy(CBuild_String *str)
 {
     CBuild_String newStr;
-    newStr.str = malloc(str->buf_len); // assign new memory on heap
+    newStr.str = (char *)malloc(str->buf_len); // assign new memory on heap
     newStr.buf_len = str->buf_len;     // copy the buf_len and len
     newStr.len = str->len;
 
@@ -189,7 +189,7 @@ CBuild_String *CBuild_String_concat(CBuild_String *str1, CBuild_String *str2)
  * @param str2 The second char* to concatenate from
  * @return CBuild_String* The reference to str1
  */
-CBuild_String *CBuild_String_concatCStr(CBuild_String *str1, char *str2)
+CBuild_String *CBuild_String_concatCStr(CBuild_String *str1, const char *str2)
 {
     int len2 = strlen(str2);
     int max_len = str1->len + len2;
@@ -211,6 +211,93 @@ CBuild_String *CBuild_String_concatCStr(CBuild_String *str1, char *str2)
     memcpy((str1->str + str1->len), str2, len2 + 1); // assumes str1 has enough space
 
     str1->len += len2; // assign the new length
+
+    return str1; // return the str1 reference
+}
+
+/**
+ * @brief Concatenates and possibly expands str1 with str2 and returns ref to str1 for count number of bytes
+ *        also it automatically attaches a \0 character at the end of the string of str1
+ *
+ * @param str1 The first CBuild_String* to concatenate to
+ * @param str2 The second CBuild_String* to concatenate from
+ * @param count The number of characters to concatenate excluding the ending \0
+ * @return CBuild_String* The reference to str1
+ */
+CBuild_String *CBuild_String_concatN(CBuild_String *str1, CBuild_String *str2, int count)
+{
+    int max_len = str1->len + str2->len + 2;
+    if (str1->buf_len < max_len) // not enough size, first allocate memory for concat [+2 for \0 chars]
+    {
+        int chunk_count = max_len / CBUILDER_BUF_CHUNK;
+        if (max_len % CBUILDER_BUF_CHUNK) // allocate extra chunk for spill
+        {
+            chunk_count++;
+        }
+
+        str1->buf_len = CBUILDER_BUF_CHUNK * chunk_count; // set new buf_len
+        char *newMem = (char *)malloc(str1->buf_len);
+        memcpy(newMem, str1->str, str1->len + 1);
+        free(str1->str); // delete the orginal and assign new
+        str1->str = newMem;
+    }
+
+    if (count < str2->len)
+    {
+        memcpy((str1->str + str1->len), str2->str, count); // assumes str1 has enough space
+        *(str1->str + str1->len + count + 1) = '\0'; // make sure it is null terminated
+        str1->len += count; // assign the new len
+    }
+    else
+    {
+        memcpy((str1->str + str1->len), str2->str, str2->len); // assumes str1 has enough space
+        *(str1->str + str1->len + str2->len + 1) = '\0'; // make sure it is null terminated
+        str1->len += str2->len; // assign the new len
+    }
+
+    return str1; // return the str1 reference
+}
+
+/**
+ * @brief Concatenates and possibly expands str1 with str2 and returns ref to str1 for count number of bytes
+ *        also it automatically attaches a \0 character at the end of the string of str1
+ *
+ * @param str1 The first CBuild_String* to concatenate to
+ * @param str2 The second char* to concatenate from
+ * @param count The number of characters excluding the ending \0
+ * @return CBuild_String* The reference to str1
+ */
+CBuild_String *CBuild_String_concatCStrN(CBuild_String *str1, char *str2, int count)
+{
+    int len2 = strlen(str2);
+    int max_len = str1->len + len2;
+    if (str1->buf_len < max_len) // not enough size, first allocate memory for concat [+2 for \0 chars]
+    {
+        int chunk_count = max_len / CBUILDER_BUF_CHUNK;
+        if (max_len % CBUILDER_BUF_CHUNK) // allocate extra chunk for spill
+        {
+            chunk_count++;
+        }
+
+        str1->buf_len = CBUILDER_BUF_CHUNK * chunk_count; // set new buf_len
+        char *newMem = (char *)malloc(str1->buf_len);
+        memcpy(newMem, str1->str, str1->len);
+        free(str1->str); // delete the orginal and assign new
+        str1->str = newMem;
+    }
+
+    if (count < len2)
+    {
+        memcpy((str1->str + str1->len), str2, count); // assumes str1 has enough space
+        *(str1->str + str1->len + count + 1) = '\0'; // make sure it is null terminated
+        str1->len += count; // assign the new len
+    }
+    else
+    {
+        memcpy((str1->str + str1->len), str2, len2); // assumes str1 has enough space
+        *(str1->str + str1->len + len2 + 1) = '\0'; // make sure it is null terminated
+        str1->len += len2; // assign the new len
+    }
 
     return str1; // return the str1 reference
 }

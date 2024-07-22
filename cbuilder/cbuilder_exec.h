@@ -28,7 +28,7 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 
-int CBuild_system(char *command, char *successMsg, char *errorMsg)
+int CBuild_system(char *command, const char *successMsg, const char *errorMsg)
 {
     int retVal = system(command);
     if (retVal)
