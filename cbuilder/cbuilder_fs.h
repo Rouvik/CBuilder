@@ -68,11 +68,11 @@ CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
 
     do
     {
-        if (strcmp(fdFile.cFileName, ".") == 0 || strcmp(fdFile.cFileName, "..") == 0) // ignore this 2 stupid cases
+        if ((fdFile.cFileName[0] == '.') && (fdFile.cFileName[1] == '\0' || fdFile.cFileName[1] == '.'))
         {
             continue;
         }
-        
+
         if ((mode & CBUILD_FS_DIRMODE_FOLDERS) && (fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
         {
             CBuild_String_concatCStr(&output, fdFile.cFileName);
@@ -82,9 +82,9 @@ CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
             CBuild_String_concatCStr(&output, fdFile.cFileName);
         }
 
-        CBuild_String_concatCStr(&output, "|"); // add the ending delimeter
+        CBuild_String_concatCStr(&output, ":"); // add the ending delimeter
     } while (FindNextFileA(hFind, &fdFile));
-    
+
     FindClose(hFind); // cleanup
 
     return output;
@@ -92,7 +92,49 @@ CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
 
 #elif defined(__linux__) || defined(__APPLE__) || defined(__MACH__) // systems supporting dirent.h
 
-#error "Linux and MacOS not implemented yet..."
+#include <dirent.h>
+#include <sys/stat.h>
+#include <errno.h>
+CBuild_String CBuild_Fs_dir(const char *path, uint8_t mode)
+{
+    struct dirent *dirEntry;
+    DIR *dir;
+    struct stat fileStatus;
+
+    dir = opendir(path);
+    if (!dir)
+    {
+        fprintf(stderr, "[CBuilder FS Error] %s\n", strerror(errno));
+        return (CBuild_String){NULL, 0, 0}; // return nothing
+    }
+
+    CBuild_String output = CBuild_String_init("");
+
+    while ((dirEntry = readdir(dir)) != NULL)
+    {
+        // ignore . and .. entries
+        if ((dirEntry->d_name[0] == '.') && (dirEntry->d_name[1] == '\0' || dirEntry->d_name[1] == '.'))
+        {
+            continue;
+        }
+
+        stat(dirEntry->d_name, &fileStatus);
+        if ((mode & CBUILD_FS_DIRMODE_FOLDERS) && (fileStatus.st_mode & S_IFDIR))
+        {
+            CBuild_String_concatCStr(&output, dirEntry->d_name);
+        }
+        else if ((mode & CBUILD_FS_DIRMODE_FILES) && !(fileStatus.st_mode & S_IFDIR))
+        {
+            CBuild_String_concatCStr(&output, dirEntry->d_name);
+        }
+
+        CBuild_String_concatCStr(&output, ":");
+    }
+
+    closedir(dir); // cleanup
+
+    return output;
+}
 
 #else // unsupported system
 #error "[CBuilder FS] Unsupported system, if you know about your system, feel free to define _WIN32 for windows __linux__ or __APPLE__ or __MACH__ for linux and mac systems"
